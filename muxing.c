@@ -368,17 +368,18 @@ int main(int argc, char **argv)
         av_dict_set(&opt, argv[2]+1, argv[3], 0);
     }
 
+	extern AVOutputFormat ff_mp4_muxer;
+	ff_mp4_muxer.video_codec = AV_CODEC_ID_H264;
+	ff_mp4_muxer.audio_codec = AV_CODEC_ID_AAC,
+	//ff_mp4_muxer.audio_codec = AV_CODEC_ID_AMR_NB;
+
     /* allocate the output media context */
-    avformat_alloc_output_context2(&oc, NULL, NULL, filename);
-    if (!oc) {
-        printf("Could not deduce output format from file extension: using MPEG.\n");
-        avformat_alloc_output_context2(&oc, NULL, "mpeg", filename);
-    }
+    //avformat_alloc_output_context2(&oc, NULL, NULL, filename);
+	avformat_alloc_output_context2(&oc, &ff_mp4_muxer, "mpeg", filename);
     if (!oc)
         return 1;
 
     fmt = oc->oformat;
-	//fmt->video_codec = AV_CODEC_ID_NONE;
 
     /* Add the audio and video streams using the default format codecs
      * and initialize the codecs. */
