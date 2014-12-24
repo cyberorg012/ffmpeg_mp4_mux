@@ -87,13 +87,44 @@ static void add_stream(OutputStream *ost, AVFormatContext *oc,
     AVCodecContext *c;
     int i;
 
-    /* find the encoder */
-    *codec = avcodec_find_encoder(codec_id);
-    if (!(*codec)) {
-        fprintf(stderr, "Could not find encoder for '%s'\n",
-                avcodec_get_name(codec_id));
-        exit(1);
-    }
+	*codec = NULL;
+	if(codec_id == AV_CODEC_ID_H264){
+		AVCodec ff_fakeh264_encoder = {
+			.name             = "libx264",
+			.long_name        = "libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+			.type             = AVMEDIA_TYPE_VIDEO,
+			.id               = AV_CODEC_ID_H264,
+			.priv_data_size   = sizeof(1000),
+			.init             = NULL,
+			.encode2          = NULL,
+			.close            = NULL,
+			.capabilities     = CODEC_CAP_DELAY | CODEC_CAP_AUTO_THREADS,
+			.priv_class       = NULL,
+			.defaults         = NULL,
+			.init_static_data = NULL,
+		};
+
+		*codec = &ff_fakeh264_encoder;
+	}else{
+		AVCodec ff_fake_amrnb_encoder = {
+			.name           = "libopencore_amrnb",
+			.long_name      = "OpenCORE AMR-NB (Adaptive Multi-Rate Narrow-Band)",
+			.type           = AVMEDIA_TYPE_AUDIO,
+			//.id             = AV_CODEC_ID_AMR_NB,
+			.id             = AV_CODEC_ID_AAC,
+			.priv_data_size = sizeof(1000),
+			.init           = NULL,
+			.encode2        = NULL,
+			.close          = NULL,
+			.capabilities   = CODEC_CAP_DELAY | CODEC_CAP_SMALL_LAST_FRAME,
+			.sample_fmts    = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16,
+															 AV_SAMPLE_FMT_NONE },
+			.priv_class     = NULL,
+		};
+		*codec = &ff_fake_amrnb_encoder;
+	}
+
+	printf("avformat_new_stream\n");
 
     ost->st = avformat_new_stream(oc, *codec);
     if (!ost->st) {
