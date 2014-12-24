@@ -55,18 +55,6 @@
 // a wrapper around a single output AVStream
 typedef struct OutputStream {
     AVStream *st;
-
-    /* pts of the next frame that will be generated */
-    int64_t next_pts;
-    int samples_count;
-
-    AVFrame *frame;
-    AVFrame *tmp_frame;
-
-    float t, tincr, tincr2;
-
-    struct SwsContext *sws_ctx;
-    struct SwrContext *swr_ctx;
 } OutputStream;
 
 static void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt)
@@ -219,7 +207,7 @@ static int write_audio_frame(AVFormatContext *oc, OutputStream *ost)
 		uint64_t timestamp_us = (now.tv_sec*1000000LL + now.tv_usec - begin_timestamp_us);
         //timestamp_us = av_rescale_q(ost->samples_count, (AVRational){1, c->sample_rate}, c->time_base);
         //ost->samples_count += dst_nb_samples;
-		printf("audio ts =%d\n", timestamp_us);
+		printf("audio ts =%lld\n", timestamp_us);
 
 		pkt.stream_index  = ost->st->index;
 		pkt.pts = pkt.dts = timestamp_us;
@@ -316,15 +304,6 @@ static int write_video_frame(AVFormatContext *oc, OutputStream *ost)
 	return 0;
 }
 
-static void close_stream(AVFormatContext *oc, OutputStream *ost)
-{
-    avcodec_close(ost->st->codec);
-    av_frame_free(&ost->frame);
-    av_frame_free(&ost->tmp_frame);
-    sws_freeContext(ost->sws_ctx);
-    swr_free(&ost->swr_ctx);
-}
-
 /**************************************************************/
 /* media file output */
 
@@ -336,7 +315,6 @@ int main(int argc, char **argv)
     AVFormatContext *oc;
     AVCodec *audio_codec, *video_codec;
     int ret;
-    int have_video = 0, have_audio = 0;
     int encode_video = 0, encode_audio = 0;
     AVDictionary *opt = NULL;
 
@@ -375,22 +353,12 @@ int main(int argc, char **argv)
      * and initialize the codecs. */
     if (fmt->video_codec != AV_CODEC_ID_NONE) {
         add_stream(&video_st, oc, &video_codec, fmt->video_codec);
-        have_video = 1;
         encode_video = 1;
     }
     if (fmt->audio_codec != AV_CODEC_ID_NONE) {
         add_stream(&audio_st, oc, &audio_codec, fmt->audio_codec);
-        have_audio = 1;
         encode_audio = 1;
     }
-
-    /* Now that all the parameters are set, we can open the audio and
-     * video codecs and allocate the necessary encode buffers. */
-    //if (have_video)
-    //    open_video(oc, video_codec, &video_st, opt);
-
-    //if (have_audio)
-    //    open_audio(oc, audio_codec, &audio_st, opt);
 
     av_dump_format(oc, 0, filename, 1);
 
@@ -417,15 +385,8 @@ int main(int argc, char **argv)
 	begin_timestamp_us = (now.tv_sec*1000000LL + now.tv_usec);
 
     while (encode_video || encode_audio) {
-        /* select the stream to encode */
-        if (encode_video &&
-            (!encode_audio || av_compare_ts(video_st.next_pts, video_st.st->codec->time_base,
-                                            audio_st.next_pts, audio_st.st->codec->time_base) <= 0)) {
-            encode_video = !write_video_frame(oc, &video_st);
-        } else {
-            encode_audio = !write_audio_frame(oc, &audio_st);
-        }
-
+        encode_video = !write_video_frame(oc, &video_st);
+        encode_audio = !write_audio_frame(oc, &audio_st);
 		usleep(1000);
     }
 
@@ -434,12 +395,6 @@ int main(int argc, char **argv)
      * av_write_trailer() may try to use memory that was freed on
      * av_codec_close(). */
     av_write_trailer(oc);
-
-    /* Close each codec. */
-    if (have_video)
-        close_stream(oc, &video_st);
-    if (have_audio)
-        close_stream(oc, &audio_st);
 
     if (!(fmt->flags & AVFMT_NOFILE))
         /* Close the output file. */
